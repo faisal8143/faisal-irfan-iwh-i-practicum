@@ -1,0 +1,18 @@
+doctype html
+html
+  head
+    title= title
+  body
+    a(href="/") Return to the homepage
+    h1 Add a Campaign Brief
+        form(method="post" action="/update-cobj")
+      label(for="name") Name
+      input#name(type="text" name="name" required)
+
+      label(for="channel") Channel
+      input#channel(type="text" name="channel" required)
+
+      label(for="objective") Objective
+      input#objective(type="text" name="objective" required)
+
+      button(type="submit") Create brief
