@@ -1,0 +1,26 @@
+doctype html
+html(lang="en")
+  head
+    meta(charset="utf-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1")
+    title= title
+    link(rel="stylesheet" href="/css/style.css")
+  body
+    h1= title
+    a(href="/update-cobj") Add to this table
+
+    table
+      thead
+        tr
+          th(scope="col") Name
+          th(scope="col") Channel
+          th(scope="col") Objective
+      tbody
+        each record in records
+          tr
+            td= record.name
+            td= record.channel
+            td= record.objective
+        else
+          tr
+            td(colspan="3") No campaign briefs yet.
