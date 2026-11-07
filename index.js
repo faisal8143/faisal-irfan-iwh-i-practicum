@@ -1,71 +1,95 @@
+require('dotenv').config();
+
 const express = require('express');
 const axios = require('axios');
+const path = require('path');
+
 const app = express();
+const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
+const objectUrl = 'https://api.hubapi.com/crm/v3/objects/2-271405404';
+
+if (!token) {
+  throw new Error('Set HUBSPOT_PRIVATE_APP_TOKEN in your local .env file.');
+}
+
+const hubspot = axios.create({
+  headers: { Authorization: `Bearer ${token}` },
+  timeout: 15000
+});
 
 app.set('view engine', 'pug');
-app.use(express.static(__dirname + '/public'));
-app.use(express.urlencoded({ extended: true }));
+app.set('views', path.join(__dirname, 'views'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// * Please DO NOT INCLUDE the private app access token in your repo. Don't do this practicum in your normal account.
-const PRIVATE_APP_ACCESS = '';
+// Homepage: read Campaign Briefs and display them in a table.
+app.get('/', async (req, res) => {
+  try {
+    const records = [];
+    let after;
 
-// TODO: ROUTE 1 - Create a new app.get route for the homepage to call your custom object data. Pass this data along to the front-end and create a new pug template in the views folder.
-
-// * Code for Route 1 goes here
-
-// TODO: ROUTE 2 - Create a new app.get route for the form to create or update new custom object data. Send this data along in the next route.
-
-// * Code for Route 2 goes here
-
-// TODO: ROUTE 3 - Create a new app.post route for the custom objects form to create or update your custom object data. Once executed, redirect the user to the homepage.
-
-// * Code for Route 3 goes here
-
-/** 
-* * This is sample code to give you a reference for how you should structure your calls. 
-
-* * App.get sample
-app.get('/contacts', async (req, res) => {
-    const contacts = 'https://api.hubspot.com/crm/v3/objects/contacts';
-    const headers = {
-        Authorization: `Bearer ${PRIVATE_APP_ACCESS}`,
-        'Content-Type': 'application/json'
-    }
-    try {
-        const resp = await axios.get(contacts, { headers });
-        const data = resp.data.results;
-        res.render('contacts', { title: 'Contacts | HubSpot APIs', data });      
-    } catch (error) {
-        console.error(error);
-    }
-});
-
-* * App.post sample
-app.post('/update', async (req, res) => {
-    const update = {
-        properties: {
-            "favorite_book": req.body.newVal
+    do {
+      const response = await hubspot.get(objectUrl, {
+        params: {
+          properties: 'name,channel,objective',
+          limit: 100,
+          after
         }
-    }
+      });
 
-    const email = req.query.email;
-    const updateContact = `https://api.hubapi.com/crm/v3/objects/contacts/${email}?idProperty=email`;
-    const headers = {
-        Authorization: `Bearer ${PRIVATE_APP_ACCESS}`,
-        'Content-Type': 'application/json'
-    };
+      for (const result of response.data.results) {
+        records.push(result.properties);
+      }
 
-    try { 
-        await axios.patch(updateContact, update, { headers } );
-        res.redirect('back');
-    } catch(err) {
-        console.error(err);
-    }
+      after = response.data.paging?.next?.after;
+    } while (after != null);
 
+    return res.render('homepage', {
+      title: 'Campaign Briefs',
+      records
+    });
+  } catch (error) {
+    console.error('Could not load briefs:', error.response?.status || 'connection error');
+    return res.status(502).send('Could not load Campaign Briefs from HubSpot.');
+  }
 });
-*/
 
+// Form: show the page for adding a Campaign Brief.
+app.get('/update-cobj', (req, res) => {
+  return res.render('updates', {
+    title: 'Update Custom Object Form | Integrating With HubSpot I Practicum'
+  });
+});
 
-// * Localhost
-app.listen(3000, () => console.log('Listening on http://localhost:3000'));
+// Form submission: create a record, then return to the homepage.
+app.post('/update-cobj', async (req, res) => {
+  const { name, channel, objective } = req.body || {};
+  const fields = [name, channel, objective];
+
+  if (!fields.every(value => typeof value === 'string' && value.trim() !== '')) {
+    return res.status(400).send('Please enter a name, channel, and objective.');
+  }
+
+  const record = {
+    properties: {
+      name: name.trim(),
+      channel: channel.trim(),
+      objective: objective.trim()
+    }
+  };
+
+  try {
+    await hubspot.post(objectUrl, record);
+    return res.redirect(303, '/');
+  } catch (error) {
+    console.error('Could not create brief:', error.response?.status || 'connection error');
+    return res.status(502).send(
+      'Could not confirm the save. Check the HubSpot list before trying again.'
+    );
+  }
+});
+
+app.listen(3000, '127.0.0.1', () => {
+  console.log('Open http://127.0.0.1:3000');
+});
